@@ -4,6 +4,8 @@ import nltk
 import pandas as pd
 import gensim
 from library import read_files, clean_text_simple
+from sklearn.feature_extraction.text import TfidfVectorizer
+
 
 #data_path = '../data/'
 #model = gensim.models.word2vec.Word2Vec.load(data_path + 'custom_w2v_model.txt')
@@ -20,6 +22,8 @@ cleaned_abstracts = pd.read_csv(file_names[2], index_col=0, header=None)
 # - Número de pares de sinônimos entre as keywords
 # - Overlap entre títulos e abstracts opostos ok
 # - authors overlap ok
+# - mesmo journal ok
+# - tf-idf vectors cosine similarity
 ### TMP
 
 # the columns of node_info are
@@ -56,6 +60,28 @@ class FeatureExtractor(object):
         intersec = [len(set(x).intersection(set(y))) for x, y in zip(array_a, array_b)]
         return intersec
 
+    def __tfidf_cossine_similarity(self, a, b):
+        documents = np.concatenate((a,b), axis = 0)
+        newdoc = []
+        for item in documents:
+            if type(item[0]) == str:
+                newdoc.append(item[0].replace(","," "))
+            else:
+                newdoc.append("")
+        tfidf = TfidfVectorizer().fit_transform(newdoc)
+
+        print "fitted"
+        dot_products = []
+        n = len(a)
+        print "n = ", n
+        for i in range(n):
+            if i%10000==0:
+                print i
+            dot_products.append((tfidf[i]*tfidf[i+n].T).A[0] )
+        print "gerou"
+        return np.array(dot_products)            
+
+
     def fit(self, X, y):
         pass
 
@@ -67,12 +93,22 @@ class FeatureExtractor(object):
         idx_docs2 = X[:,1]
         features = []
 
+        # cosine similarity of titles text
+        
+        titles_docs1 = np.array(cleaned_titles.loc[idx_docs1])
+        titles_docs2 = np.array(cleaned_titles.loc[idx_docs2])
+        features.append(self.__tfidf_cossine_similarity(titles_docs1, titles_docs2))            
+        
+        # cosine similarity of abstract text
+        abstract_doc1 = np.array(cleaned_abstracts.loc[idx_docs1])
+        abstract_doc2 = np.array(cleaned_abstracts.loc[idx_docs2])
+        features.append(self.__tfidf_cossine_similarity(abstract_doc1, abstract_doc2))
+
         # difference publication year
         year_docs1 = np.array(node_info.loc[idx_docs1,1:1].astype(int))
         year_docs2 = np.array(node_info.loc[idx_docs2,1:1].astype(int))
         features.append(year_docs1 - year_docs2)
         # -----
-        
         # titles overlap
         titles_docs1 = np.array(cleaned_titles.loc[idx_docs1])
         titles_docs2 = np.array(cleaned_titles.loc[idx_docs2])
@@ -103,6 +139,17 @@ class FeatureExtractor(object):
         intersec = np.reshape(np.array(intersec), (-1,1))
         features.append(intersec)
         # -----
+
+        # same journal
+        journal_doc1 = np.array(node_info.loc[idx_docs1, 4:4])
+        journal_doc2 = np.array(node_info.loc[idx_docs2, 4:4])
+        empties = np.array(["" for i in range(len(journal_doc1))])
+        unknown_journal = np.array((journal_doc1=="") | (journal_doc2=="")).astype(int)
+        is_same_journal = np.array((journal_doc1!="") & (journal_doc2!="") | (journal_doc1==journal_doc2)).astype(int)
+        is_other_journal = np.array((journal_doc1!="") & (journal_doc2!="") & (journal_doc1!=journal_doc2)).astype(int)
+        features.append(unknown_journal)
+        features.append(is_same_journal)
+        features.append(is_other_journal)
 
         features_array = np.concatenate(tuple(features), axis=1)
 
