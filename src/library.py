@@ -86,9 +86,12 @@ def clean_text_simple(text, remove_stopwords=True, pos_filtering=True, stemming=
         # apply Porter's stemmer
         tokens_stemmed = list()
         for token in tokens:
-            print token
+            #print token
             if token not in words_problem:
                 tokens_stemmed.append(stemmer.stem(token))
         #tokens = list(set(tokens_stemmed))
 
     return(tokens)
+
+def find_keywords(text):
+    return text
