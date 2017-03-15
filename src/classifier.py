@@ -1,6 +1,7 @@
 from sklearn.base import BaseEstimator
 import xgboost as xgb
 from sklearn import svm
+from sklearn.ensemble import ExtraTreesClassifier
 
 class Classifier(BaseEstimator):
     def __init__(self):

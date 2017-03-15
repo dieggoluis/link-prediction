@@ -17,7 +17,7 @@ def preprocessing():
     titles = np.array(node_info.loc[:,2:2])
     titles_array = [','.join(clean_text_simple(t[0])) for t in titles]
     df_titles = pd.DataFrame(data=titles_array, index=node_info.index)
-    print "Writing ", file_names[1]
+    print "writing ", file_names[1]
     df_titles.to_csv(file_names[1], header=False)
 
     # abstracts
@@ -25,7 +25,7 @@ def preprocessing():
     abstracts = np.array(node_info.loc[:,5:5])
     abstract_array = [','.join(clean_text_simple(a[0])) for a in abstracts]
     df_abstracts = pd.DataFrame(data=abstract_array, index=node_info.index)
-    print "Writing ", file_names[2]
+    print "writing ", file_names[2]
     df_abstracts.to_csv(file_names[2], header=False)
 
 def read_files(file_names):
