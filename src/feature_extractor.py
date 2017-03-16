@@ -41,26 +41,29 @@ class FeatureExtractor(object):
     def __init__(self):
         pass
 
-    def __intersect_array(self, a, b):
+    def __intersect_array(self, a, b, union=False):
         array_a = []
         for row in a:
-            if row[0]!=row[0] :
+            if len(row)==0 or row[0]!=row[0] :
                 array_a.append([])
             else:
                 array_a.append([s.strip() for s in row[0].split(',')])
         # doc2
         array_b = []
         for row in b:
-            if row[0]!=row[0] :
+            if len(row)==0 or row[0]!=row[0] :
                 array_b.append([])
             else:
                 array_b.append([s.strip() for s in row[0].split(',')])
 
         # check same size
         assert len(array_a)==len(array_b)
-
         intersec = [len(set(x).intersection(set(y))) for x, y in zip(array_a, array_b)]
-        return intersec
+        if(not union):
+            return intersec
+        else:
+            uni = [len(x)+len(y)-inter for x,y,inter in zip(array_a, array_b, intersec)]
+            return intersec, uni
 
     def __tfidf_cossine_similarity(self, a, b):
         documents = np.concatenate((a,b), axis = 0)
@@ -91,15 +94,29 @@ class FeatureExtractor(object):
         vertices = list(set(ids1.astype(str)).union(ids2.astype(str)))
         edges = [tuple([str(row[0]), str(row[1])]) for row, link in zip(X,y) if link == 1]
 
-        self.network_graph = igraph.Graph() 
-        self.network_graph.add_vertices(vertices)
-        self.network_graph.add_edges(edges)
+        self.graph = igraph.Graph() 
+        self.graph.add_vertices(vertices)
+        self.graph.add_edges(edges)
+
+        self.di_network_graph = nx.DiGraph() 
+        self.di_network_graph.add_nodes_from(vertices)
+        self.di_network_graph.add_edges_from(edges)
+
+        self.un_network_graph = nx.Graph() 
+        self.un_network_graph.add_nodes_from(vertices)
+        self.un_network_graph.add_edges_from(edges)
 
         vs = zip(vertices, range(len(vertices)))
         self.hash_vs = {a:b for a,b in vs}
-        print 'calculating shortest paths...'
-        self.dmatrix = np.array(self.network_graph.shortest_paths())
+        #print 'calculating shortest paths...'
+        #self.dmatrix = np.array(self.graph.shortest_paths())
 
+        #uncomment
+        # WARNING: cutoff should not be set in our final submission, which is equivalent to set it to infinity
+        print 'calculating betweenness centrality'
+        self.di_b_centrality = self.graph.betweenness(directed=True, cutoff=3)
+        self.un_b_centrality = self.graph.betweenness(directed=False, cutoff=3)
+        '''
     def transform(self, X):
 
         print 'Transform...'
@@ -107,18 +124,105 @@ class FeatureExtractor(object):
         idx_docs1 = X[:,0]
         idx_docs2 = X[:,1]
         features = []
+
+        # difference in number of inlinks
+        print "difference in number of inlinks + number of times 'to' is cited"
+        degrees_vs = self.graph.indegree()
+        degrees_idx1 = [degrees_vs[self.hash_vs[str(idx1)]] for idx1 in idx_docs1]
+        degrees_idx2 = [degrees_vs[self.hash_vs[str(idx2)]] for idx2 in idx_docs2]
+        diff_degrees = [a-b for a,b in zip(degrees_idx1,degrees_idx2)]
+        degrees_idx2 = np.reshape(np.array(degrees_idx2), (-1,1))
+        diff_degrees = np.reshape(np.array(diff_degrees), (-1,1))
+        #degrees_idx1 = np.reshape(np.array(degrees_idx1), (-1, 1))
+        #degrees_idx2 = np.reshape(np.array(degrees_idx2), (-1, 1))
+        #print degrees_idx1
+        #features.append(degrees_idx1)
+        features.append(degrees_idx2)
+        features.append(diff_degrees)
+
+        # whether papers were classified in the same cluster or not
+        # TO IMPLEMENT YET
+
+
+        # uncomment
         
+        print 'difference in betweeness centrality'
+        
+        di_b_centrality_idx1 = np.array([self.di_b_centrality[self.hash_vs[str(nodeid)]] for nodeid in idx_docs1])
+        di_b_centrality_idx2 = np.array([self.di_b_centrality[self.hash_vs[str(nodeid)]] for nodeid in idx_docs2])
+        diff_di_b_centrality = di_b_centrality_idx2 - di_b_centrality_idx1
+        diff_di_b_centrality = np.reshape(np.array(diff_di_b_centrality), (-1, 1))
+        
+        un_b_centrality_idx1 = np.array([self.un_b_centrality[self.hash_vs[str(nodeid)]] for nodeid in idx_docs1])
+        un_b_centrality_idx2 = np.array([self.un_b_centrality[self.hash_vs[str(nodeid)]] for nodeid in idx_docs2])
+        diff_un_b_centrality = un_b_centrality_idx2 - un_b_centrality_idx1
+        diff_un_b_centrality = np.reshape(np.array(diff_un_b_centrality), (-1, 1))
+
+        features.append(diff_di_b_centrality)
+        features.append(diff_un_b_centrality)
+
+        # shortest path 
+        # uncomment
+        '''        
+        print 'shortest path...'
+        distances = [self.dmatrix[self.hash_vs[str(idx1)], self.hash_vs[str(idx2)]] for idx1, idx2 in zip(idx_docs1, idx_docs2)]
+        shortest_dist_3 = [1 if d <= 3 else 0 for d in distances]
+        shortest_dist_5 = [1 if d <= 5 and d > 3 else 0 for d in distances]
+        shortest_dist_10 = [1 if d <= 10 and d > 5 else 0 for d in distances]
+        shortest_dist_inf = [1 if d > 10 else 0 for d in distances]
+
+        shortest_dist_3 = np.reshape(np.array(shortest_dist_3), (-1,1))
+        shortest_dist_5 = np.reshape(np.array(shortest_dist_5), (-1,1))
+        shortest_dist_10 = np.reshape(np.array(shortest_dist_10), (-1,1))
+        shortest_dist_inf = np.reshape(np.array(shortest_dist_inf), (-1,1))
+
+        features.append(shortest_dist_3)
+        features.append(shortest_dist_5)
+        features.append(shortest_dist_10)
+        features.append(shortest_dist_inf)'''
+
+        print "we study neighbors"
+        set_vs = set(self.graph.vs['name'])
+        is_in_graph1 = [(str(v) in set_vs) for v in idx_docs1]
+        is_in_graph2 = [(str(v) in set_vs) for v in idx_docs2]
+        neighbors1 = []
+        for node,is_in in zip(idx_docs1, is_in_graph1):
+            if is_in:
+                neighbors1.append(",".join([str(v) for v in self.graph.adjacent(str(node), mode='ALL')])) # both in and out neighbors
+            else:
+                neighbors1.append("")
+        neighbors2 = []
+        for node,is_in in zip(idx_docs2, is_in_graph2):
+            if is_in:
+                neighbors2.append(",".join([str(v) for v in self.graph.adjacent(str(node), mode='ALL')])) # both in and out neighbors
+            else:
+                neighbors2.append("")
+        #neighbors1 = [",".join([str(v) for v in self.graph.adjacent(int(node))]) if is_in else "" for node,is_in in zip(idx_docs1,is_in_graph1)]        
+        #neighbors2 = [",".join([str(v) for v in self.graph.adjacent(int(node))]) if is_in else "" for node,is_in in zip(idx_docs2,is_in_graph2)]        
+        intersec, uni = self.__intersect_array(neighbors1,neighbors2,union=True)
+        jaccard_coefficient = [float(a)/float(b) if b!=0 else 0 for a,b in zip(intersec,uni)]
+        intersec = np.reshape(np.array(intersec), (-1,1))
+        jaccard_coefficient = np.reshape(np.array(jaccard_coefficient), (-1,1))
+        features.append(intersec)
+        features.append(jaccard_coefficient)
+
+        # difference in number of inlinks
+
+
         # cosine similarity of titles text
+        # uncomment
+        '''
         print 'titles cosine similarity...'
         titles_docs1 = np.array(cleaned_titles.loc[idx_docs1])
         titles_docs2 = np.array(cleaned_titles.loc[idx_docs2])
         features.append(self.__tfidf_cossine_similarity(titles_docs1, titles_docs2))            
         
+
         # cosine similarity of abstract text
         print 'abstract cosine similarity...'
         abstract_doc1 = np.array(cleaned_abstracts.loc[idx_docs1])
         abstract_doc2 = np.array(cleaned_abstracts.loc[idx_docs2])
-        features.append(self.__tfidf_cossine_similarity(abstract_doc1, abstract_doc2))
+        features.append(self.__tfidf_cossine_similarity(abstract_doc1, abstract_doc2))'''
 
         # difference publication year
         print 'difference publication year...'
@@ -150,12 +254,15 @@ class FeatureExtractor(object):
         features.append(intersec)
 
         # authors overlap
-        print 'authors overlap...'
+        print 'authors overlap and self-citations'
         authors_doc1 = np.array(node_info.loc[idx_docs1,3:3])
         authors_doc2 = np.array(node_info.loc[idx_docs2,3:3])
         intersec = self.__intersect_array(authors_doc1, authors_doc2)
+        self_citation = [1 if x>0 else 0 for x in intersec]
         intersec = np.reshape(np.array(intersec), (-1,1))
+        self_citation = np.reshape(np.array(self_citation), (-1,1))
         features.append(intersec)
+        features.append(self_citation)
 
         # same journal
         print 'same journal...'
@@ -168,35 +275,6 @@ class FeatureExtractor(object):
         features.append(unknown_journal)
         features.append(is_same_journal)
         features.append(is_other_journal)
-
-        # degrees
-        print 'vertex degrees...'
-        degrees_vs = self.network_graph.indegree()
-        distances = [self.dmatrix[self.hash_vs[str(idx1)], self.hash_vs[str(idx2)]] for idx1, idx2 in zip(idx_docs1, idx_docs2)]
-        degrees_idx1 = [degrees_vs[self.hash_vs[str(idx1)]] for idx1 in idx_docs1]
-        degrees_idx2 = [degrees_vs[self.hash_vs[str(idx2)]] for idx2 in idx_docs2]
-
-        degrees_idx1 = np.reshape(np.array(degrees_idx1), (-1, 1))
-        degrees_idx2 = np.reshape(np.array(degrees_idx2), (-1, 1))
-        features.append(degrees_idx1)
-        features.append(degrees_idx2)
-
-        # shortest path 
-        print 'shortest path...'
-        shortest_dist_3 = [1 if d <= 3 else 0 for d in distances]
-        shortest_dist_5 = [1 if d <= 5 and d > 3 else 0 for d in distances]
-        shortest_dist_10 = [1 if d <= 10 and d > 5 else 0 for d in distances]
-        shortest_dist_inf = [1 if d > 10 else 0 for d in distances]
-
-        shortest_dist_3 = np.reshape(np.array(shortest_dist_3), (-1,1))
-        shortest_dist_5 = np.reshape(np.array(shortest_dist_5), (-1,1))
-        shortest_dist_10 = np.reshape(np.array(shortest_dist_10), (-1,1))
-        shortest_dist_inf = np.reshape(np.array(shortest_dist_inf), (-1,1))
-
-        features.append(shortest_dist_3)
-        features.append(shortest_dist_5)
-        features.append(shortest_dist_10)
-        features.append(shortest_dist_inf)
 
         features_array = np.concatenate(tuple(features), axis=1)
 
