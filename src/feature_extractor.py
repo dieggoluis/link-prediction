@@ -6,7 +6,7 @@ import gensim
 import igraph
 from library import read_files, clean_text_simple
 from sklearn.feature_extraction.text import TfidfVectorizer
-
+from sklearn.preprocessing import scale
 
 #data_path = '../data/'
 #model = gensim.models.word2vec.Word2Vec.load(data_path + 'custom_w2v_model.txt')
@@ -83,6 +83,8 @@ class FeatureExtractor(object):
             if i%10000==0:
                 print i
             dot_products.append((tfidf[i]*tfidf[i+n].T).A[0] )
+        # normalizing
+        dot_products = scale(dot_products)
         #print "gerou"
         return np.array(dot_products)            
 
@@ -116,7 +118,7 @@ class FeatureExtractor(object):
         print 'calculating betweenness centrality'
         self.di_b_centrality = self.graph.betweenness(directed=True, cutoff=3)
         self.un_b_centrality = self.graph.betweenness(directed=False, cutoff=3)
-        '''
+
     def transform(self, X):
 
         print 'Transform...'
@@ -131,12 +133,15 @@ class FeatureExtractor(object):
         degrees_idx1 = [degrees_vs[self.hash_vs[str(idx1)]] for idx1 in idx_docs1]
         degrees_idx2 = [degrees_vs[self.hash_vs[str(idx2)]] for idx2 in idx_docs2]
         diff_degrees = [a-b for a,b in zip(degrees_idx1,degrees_idx2)]
+        degrees_idx2 = scale(degrees_idx2)
+        diff_degrees = scale(diff_degrees)
         degrees_idx2 = np.reshape(np.array(degrees_idx2), (-1,1))
         diff_degrees = np.reshape(np.array(diff_degrees), (-1,1))
         #degrees_idx1 = np.reshape(np.array(degrees_idx1), (-1, 1))
         #degrees_idx2 = np.reshape(np.array(degrees_idx2), (-1, 1))
         #print degrees_idx1
         #features.append(degrees_idx1)
+
         features.append(degrees_idx2)
         features.append(diff_degrees)
 
@@ -151,11 +156,13 @@ class FeatureExtractor(object):
         di_b_centrality_idx1 = np.array([self.di_b_centrality[self.hash_vs[str(nodeid)]] for nodeid in idx_docs1])
         di_b_centrality_idx2 = np.array([self.di_b_centrality[self.hash_vs[str(nodeid)]] for nodeid in idx_docs2])
         diff_di_b_centrality = di_b_centrality_idx2 - di_b_centrality_idx1
+        diff_di_b_centrality = scale(di_b_centrality)
         diff_di_b_centrality = np.reshape(np.array(diff_di_b_centrality), (-1, 1))
         
         un_b_centrality_idx1 = np.array([self.un_b_centrality[self.hash_vs[str(nodeid)]] for nodeid in idx_docs1])
         un_b_centrality_idx2 = np.array([self.un_b_centrality[self.hash_vs[str(nodeid)]] for nodeid in idx_docs2])
         diff_un_b_centrality = un_b_centrality_idx2 - un_b_centrality_idx1
+        diff_un_b_centrality = scale(diff_un_b_centrality)
         diff_un_b_centrality = np.reshape(np.array(diff_un_b_centrality), (-1, 1))
 
         features.append(diff_di_b_centrality)
@@ -175,7 +182,10 @@ class FeatureExtractor(object):
         shortest_dist_5 = np.reshape(np.array(shortest_dist_5), (-1,1))
         shortest_dist_10 = np.reshape(np.array(shortest_dist_10), (-1,1))
         shortest_dist_inf = np.reshape(np.array(shortest_dist_inf), (-1,1))
-
+        
+        distances = scale(distances)
+        distances = np.reshape(np.array(distances), (-1,1))
+        features.append(distances)
         features.append(shortest_dist_3)
         features.append(shortest_dist_5)
         features.append(shortest_dist_10)
@@ -201,6 +211,8 @@ class FeatureExtractor(object):
         #neighbors2 = [",".join([str(v) for v in self.graph.adjacent(int(node))]) if is_in else "" for node,is_in in zip(idx_docs2,is_in_graph2)]        
         intersec, uni = self.__intersect_array(neighbors1,neighbors2,union=True)
         jaccard_coefficient = [float(a)/float(b) if b!=0 else 0 for a,b in zip(intersec,uni)]
+        intersec = scale(intersec)
+        jaccard_coefficient = scale(jaccard_coefficient)
         intersec = np.reshape(np.array(intersec), (-1,1))
         jaccard_coefficient = np.reshape(np.array(jaccard_coefficient), (-1,1))
         features.append(intersec)
@@ -215,8 +227,8 @@ class FeatureExtractor(object):
         print 'titles cosine similarity...'
         titles_docs1 = np.array(cleaned_titles.loc[idx_docs1])
         titles_docs2 = np.array(cleaned_titles.loc[idx_docs2])
-        features.append(self.__tfidf_cossine_similarity(titles_docs1, titles_docs2))            
-        
+
+        features.append(self.__tfidf_cossine_similarity(titles_docs1, titles_docs2))                  
 
         # cosine similarity of abstract text
         print 'abstract cosine similarity...'
@@ -228,13 +240,15 @@ class FeatureExtractor(object):
         print 'difference publication year...'
         year_docs1 = np.array(node_info.loc[idx_docs1,1:1].astype(int))
         year_docs2 = np.array(node_info.loc[idx_docs2,1:1].astype(int))
-        features.append(year_docs1 - year_docs2)
-
+        #features.append(year_docs1 - year_docs2)
+        diff_year = scale(year_docs1 - year_docs2)
+        features.append(diff_year)
         # titles overlap
         print 'titles overlap...'
         titles_docs1 = np.array(cleaned_titles.loc[idx_docs1])
         titles_docs2 = np.array(cleaned_titles.loc[idx_docs2])
         intersec = self.__intersect_array(titles_docs1, titles_docs2)
+        intersec = scale(intersec)
         intersec = np.reshape(np.array(intersec), (-1,1))
         features.append(intersec)
 
@@ -243,6 +257,7 @@ class FeatureExtractor(object):
         abstract_doc1 = np.array(cleaned_abstracts.loc[idx_docs1])
         abstract_doc2 = np.array(cleaned_abstracts.loc[idx_docs2])
         intersec = self.__intersect_array(abstract_doc1, abstract_doc2)
+        intersec = scale(intersec)
         intersec = np.reshape(np.array(intersec), (-1,1))
         features.append(intersec)
 
@@ -251,6 +266,7 @@ class FeatureExtractor(object):
         intersec1 = np.array(self.__intersect_array(titles_docs1, abstract_doc2))
         intersec2 = np.array(self.__intersect_array(abstract_doc1, titles_docs2))
         intersec = np.reshape(intersec1 + intersec2, (-1,1))
+        intersec = scale(intersec)
         features.append(intersec)
 
         # authors overlap
@@ -259,6 +275,7 @@ class FeatureExtractor(object):
         authors_doc2 = np.array(node_info.loc[idx_docs2,3:3])
         intersec = self.__intersect_array(authors_doc1, authors_doc2)
         self_citation = [1 if x>0 else 0 for x in intersec]
+        intersec = scale(intersec)
         intersec = np.reshape(np.array(intersec), (-1,1))
         self_citation = np.reshape(np.array(self_citation), (-1,1))
         features.append(intersec)
