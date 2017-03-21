@@ -20,6 +20,9 @@ if __name__ == '__main__':
     testing_set = files[1]
 
     training_set = np.array([element[0].split(" ") for element in training_set])
+    # this line reduces the training set to 5% of its size
+    random_sample = np.random.choice(len(training_set), len(training_set)/20)
+    training_set = training_set[random_sample]
     testing_set = np.array([element[0].split(" ") for element in testing_set])
     target_set = training_set[:,2]
 
