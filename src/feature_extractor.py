@@ -7,7 +7,12 @@ import igraph
 from library import read_files, clean_text_simple
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import scale
-
+import networkx as nx
+import itertools
+from networkx.algorithms.connectivity import local_edge_connectivity
+from networkx.algorithms.connectivity import(
+            build_auxiliary_edge_connectivity)
+from networkx.algorithms.flow import build_residual_network
 #data_path = '../data/'
 #model = gensim.models.word2vec.Word2Vec.load(data_path + 'custom_w2v_model.txt')
 #model.intersect_word2vec_format(data_path + 'GoogleNews-vectors-negative300.bin.gz', binary=True)
@@ -119,6 +124,21 @@ class FeatureExtractor(object):
         self.di_b_centrality = self.graph.betweenness(directed=True)
         self.un_b_centrality = self.graph.betweenness(directed=False)
 
+        print 'calculating local edge connectivity'
+        H = build_auxiliary_edge_connectivity(self.di_network_graph)
+        R = build_residual_network(H, 'capacity')
+        self.di_connectivity = dict.fromkeys(self.di_network_graph, dict())
+        for u, v in itertools.combinations(self.di_network_graph, 2):
+            k = local_edge_connectivity(self.di_network_graph, u, v, auxiliary=H, residual=R)
+            self.di_connectivity[u][v] = k
+        H = build_auxiliary_edge_connectivity(self.un_network_graph)
+        R = build_residual_network(H, 'capacity')
+        self.un_connectivity = dict.fromkeys(self.un_network_graph, dict())
+        for u, v in itertools.combinations(self.un_network_graph, 2):
+            k = local_edge_connectivity(self.un_network_graph, u, v, auxiliary=H, residual=R)
+            self.un_connectivity[u][v] = k
+
+
     def transform(self, X):
 
         print 'Transform...'
@@ -168,11 +188,22 @@ class FeatureExtractor(object):
         features.append(diff_di_b_centrality)
         features.append(diff_un_b_centrality)
 
+        # edge connectivity
+        di_connectivities = [self.di_connectivity[self.hash_vs[str(idx1)], self.di_connectivity[str(idx2)]] for idx1, idx2 in zip(idx_docs1, idx_docs2)]
+        un_connectivities = [self.un_connectivity[self.hash_vs[str(idx1)], self.un_connectivity[str(idx2)]] for idx1, idx2 in zip(idx_docs1, idx_docs2)]
+        di_connectivities = np.reshape(np.array(di_connectivities), (-1,1))
+        un_connectivities = np.reshape(np.array(un_connectivities), (-1,1))
+        features.append(di_connectivities)
+        features.append(un_connectivities)
+        
+
+
         # shortest path 
         # uncomment
         '''        
         print 'shortest path...'
         distances = [self.dmatrix[self.hash_vs[str(idx1)], self.hash_vs[str(idx2)]] for idx1, idx2 in zip(idx_docs1, idx_docs2)]
+
         shortest_dist_3 = [1 if d <= 3 else 0 for d in distances]
         shortest_dist_5 = [1 if d <= 5 and d > 3 else 0 for d in distances]
         shortest_dist_10 = [1 if d <= 10 and d > 5 else 0 for d in distances]
